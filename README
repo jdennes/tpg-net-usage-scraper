@@ -1,0 +1,6 @@
+Scrapes the TPG Internet site to retrieve usage stats for a DSL account
+
+Usage: ruby tpg-net-usage-scraper.rb username password
+
+Ensure that the mechanize gem is installed and that you have libxml2 version > 2.6.16 (preferably the latest)
+
