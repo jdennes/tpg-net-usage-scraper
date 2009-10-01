@@ -2,26 +2,68 @@
 # Scrapes the TPG Internet site to retrieve usage stats for a DSL account
 # Usage: ruby tpg-net-usage-scraper.rb username password
 
-# Ensure that the mechanize gem is installed
+# Ensure that the mechanize and hpricot gems are installed
 # and that you have libxml2 version > 2.6.16 (preferably the latest)
 
 require 'rubygems'
 require 'mechanize'
+require 'hpricot'
 
-login_url = 'https://cyberstore.tpg.com.au/your_account/index.php'
-agent = WWW::Mechanize.new
+# Encapsulates login and scraping functionality
+class TPGInternetUsageScraper
+  
+  attr_accessor :doc, :username, :password
 
-agent.get(login_url) do |page|
-  page.encoding = 'UTF-8'
-  account_page = page.form_with(:name => 'form') do |login|
-    login.check_username = ARGV[0]
-    login.password       = ARGV[1]
-  end.click_button
+  def initialize(username, password)
+    @username = username
+    @password = password
+  end
 
-  usage_page = agent.click(account_page.link_with(
-    :href => '/your_account/index.php?function=checkaccountusage'))
+  # Encapsulates the process of scraping  
+  def scrape
+    self.login(@username, @password)
+    package = self.get_package(@doc)
+    puts '-----------------------------------------------------------------------'
+    puts "Current usage for '#{@username}' using #{package}"
+    puts '-----------------------------------------------------------------------'
+    puts self.get_usage_stats(@doc)
+    puts '-----------------------------------------------------------------------'
+  end
 
-  # TODO: To be continued... parsing of usage page...
-  pp usage_page
+  # Login and get the doc to parse
+  def login(username, password)
+    login_url = 'https://cyberstore.tpg.com.au/your_account/index.php'
+    agent = WWW::Mechanize.new
+    agent.get(login_url) do |page|
+      page.encoding = 'UTF-8'
+      account_page = page.form_with(:name => 'form') do |login|
+        login.check_username = username
+        login.password       = password
+      end.click_button
+      usage_page = agent.click(account_page.link_with(
+        :href => '/your_account/index.php?function=checkaccountusage'))
+      # It seems easier to use hpricot directly here, than the built-in mechanize stuff
+      @doc = Hpricot(usage_page.body)
+    end
+  end
 
+  # Get the ADSL package from the doc
+  def get_package(doc) 
+    return doc.search("//table[@class='light_box']/tr/td")[4].innerHTML.html_strip
+  end
+
+  # Get the stats from the doc  
+  def get_usage_stats(doc)
+    return doc.search("//table[@class='light_box']/tr/td")[8].innerHTML.gsub('<br />', "\n").html_strip
+  end
 end
+
+class String
+  def html_strip()
+    return self.gsub(/<\/?[^>]*>/, "")
+  end
+end
+
+# Entry point...
+scr = TPGInternetUsageScraper.new(ARGV[0], ARGV[1])
+scr.scrape
