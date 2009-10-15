@@ -8,6 +8,7 @@
 require 'rubygems'
 require 'mechanize'
 require 'hpricot'
+require 'highline/import'
 
 # Encapsulates login and scraping functionality
 class TPGInternetUsageScraper
@@ -21,13 +22,16 @@ class TPGInternetUsageScraper
 
   # Encapsulates the process of scraping  
   def scrape
-    self.login(@username, @password)
-    package = self.get_package(@doc)
-    puts '-----------------------------------------------------------------------'
-    puts "Current usage for '#{@username}' using #{package}"
-    puts '-----------------------------------------------------------------------'
-    puts self.get_usage_stats(@doc)
-    puts '-----------------------------------------------------------------------'
+    if self.login(@username, @password)
+      package = self.get_package(@doc)
+      puts '-----------------------------------------------------------------------'
+      puts "Current usage for '#{@username}' using #{package}"
+      puts '-----------------------------------------------------------------------'
+      puts self.get_usage_stats(@doc)
+      puts '-----------------------------------------------------------------------'
+    else
+      puts "Sorry, login to TPG Internet for #{@username} failed!"
+    end
   end
 
   # Login and get the doc to parse
@@ -40,10 +44,15 @@ class TPGInternetUsageScraper
         login.check_username = username
         login.password       = password
       end.click_button
-      usage_page = agent.click(account_page.link_with(
-        :href => '/your_account/index.php?function=checkaccountusage'))
-      # It seems easier to use hpricot directly here, than the built-in mechanize stuff
-      @doc = Hpricot(usage_page.body)
+      begin
+        usage_page = agent.click(account_page.link_with(
+          :href => '/your_account/index.php?function=checkaccountusage'))
+        # It seems easier to use hpricot directly here, than the built-in mechanize stuff
+        @doc = Hpricot(usage_page.body)
+      rescue
+        return false
+      end
+      return true
     end
   end
 
@@ -64,6 +73,18 @@ class String
   end
 end
 
-# Entry point...
-scr = TPGInternetUsageScraper.new(ARGV[0], ARGV[1])
-scr.scrape
+# Where everything begins...
+if __FILE__ == $0
+  puts '-----------------------------------------------------------------------'
+  puts 'TPG Internet Usage Scraper - alpha'
+  puts '-----------------------------------------------------------------------'
+  if ARGV.length == 2
+    username = ARGV[0]
+    password = ARGV[1]
+  else 
+    username = ask('Username: ')
+    password = ask('Password: ') { |q| q.echo = false }
+  end
+  scr = TPGInternetUsageScraper.new(username, password)
+  scr.scrape
+end
